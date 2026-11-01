@@ -266,6 +266,8 @@ def main():
     wallet, equity = get_demo_usdt_balance()
     print("BYBIT DEMO USDT Cuzdan Bakiyesi:", wallet)
     print("BYBIT DEMO USDT Equity:", equity)
+    print("BYBIT DEMO BAGLANTI TESTI BASARILI")
+    return
     state = load_state()
     today = now().date().isoformat()
     if state.get("day") != today:
