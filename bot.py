@@ -345,6 +345,17 @@ def open_position(state, symbol, signal):
 
 
 def main():
+    balance_rows = signed_api("/fapi/v3/balance")
+    usdt = next(
+        (item for item in balance_rows if item.get("asset") == "USDT"),
+        None
+    )
+
+    if usdt is None:
+        raise RuntimeError("Demo hesabinda USDT bakiyesi bulunamadi")
+
+    print("BINANCE DEMO USDT Bakiyesi:", usdt["balance"])
+    print("Kullanilabilir USDT:", usdt["availableBalance"])
     state = load_state()
     today = now().date().isoformat()
 
