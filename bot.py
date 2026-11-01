@@ -4,9 +4,14 @@ import os
 import time
 import urllib.parse
 import urllib.request
+import hmac
+import hashlib
+import urllib.error
 from datetime import datetime, timezone
 
 BASE = "https://demo-fapi.binance.com"
+API_KEY = os.getenv("BINANCE_DEMO_API_KEY", "").strip()
+API_SECRET = os.getenv("BINANCE_DEMO_API_SECRET", "").strip()
 INTERVAL = "15m"
 CAPITAL = 1500.0
 RISK = 0.01
@@ -71,7 +76,31 @@ def api(path, params=None):
     except Exception as exc:
         print("BINANCE BAĞLANTI HATASI:", repr(exc))
         raise
+def signed_api(path, params=None):
+    if not API_KEY or not API_SECRET:
+        raise RuntimeError("Binance Demo API anahtarlari eksik")
 
+    params = dict(params or {})
+    params["timestamp"] = int(time.time() * 1000)
+    params["recvWindow"] = 5000
+
+    query = urllib.parse.urlencode(params)
+    signature = hmac.new(
+        API_SECRET.encode("utf-8"),
+        query.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+    url = BASE + path + "?" + query + "&signature=" + signature
+
+    req = urllib.request.Request(
+        url,
+        headers={"X-MBX-APIKEY": API_KEY},
+        method="GET"
+    )
+
+    with urllib.request.urlopen(req, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
 def load_state():
