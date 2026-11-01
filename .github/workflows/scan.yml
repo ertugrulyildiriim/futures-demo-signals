@@ -29,11 +29,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      
       - name: Run paper trading scanner
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_SERVER: https://ntfy.sh
+          BINANCE_DEMO_API_KEY: ${{ secrets.BINANCE_DEMO_API_KEY }}
+          BINANCE_DEMO_API_SECRET: ${{ secrets.BINANCE_DEMO_API_SECRET }}
         run: python bot.py
+
 
       - name: Save paper trading state
         run: |
