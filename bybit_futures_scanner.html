@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<title>Bybit Futures Sinyal Tarayıcı</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#131e30;--line:#26354c;--muted:#9aabc2;--text:#eef4ff;--green:#27c28a;--red:#f16c78;--blue:#6ca8ff;--amber:#f2bd59}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#101b2c,#0b1220 260px);color:var(--text);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:980px;margin:auto;padding:20px 14px 40px}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:8px 0 18px}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:.2px}.sub{color:var(--muted);font-size:13px}
+.pill{border:1px solid #31517b;color:#a9ccff;background:#142844;border-radius:99px;padding:7px 10px;font-size:12px;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:12px}
+.stat,.panel{background:rgba(19,30,48,.96);border:1px solid var(--line);border-radius:14px}
+.stat{padding:12px}.stat small{display:block;color:var(--muted);font-size:11px;margin-bottom:7px}.stat b{font-size:17px}
+.controls{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0}
+button,select{background:#1b2a41;color:var(--text);border:1px solid #344965;border-radius:10px;padding:11px 13px;font-size:14px}
+button.primary{background:#2469c9;border-color:#367edc;font-weight:650}button:disabled{opacity:.55}
+.status{color:var(--muted);font-size:13px;margin:10px 2px;min-height:20px}
+.panel{padding:14px;margin-top:12px}.panel h2{font-size:16px;margin:0 0 10px}
+.notice{font-size:12px;line-height:1.55;color:#c4d0e0;background:#18263a;border-left:3px solid var(--amber);padding:10px 12px;border-radius:8px;margin:12px 0}
+.tablewrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:680px;font-size:13px}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted);font-weight:550}
+.long{color:var(--green);font-weight:750}.short{color:var(--red);font-weight:750}.none{color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.signal{border:1px solid var(--line);border-radius:12px;padding:13px;background:#111c2d}.signalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.signal h3{margin:0;font-size:16px}
+.tag{font-size:11px;border-radius:99px;padding:5px 8px;background:#203047;color:#c6d8f1}.tag.long{background:#12382f}.tag.short{background:#421f2a}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{background:#17253a;border-radius:8px;padding:8px}.metric small{display:block;color:var(--muted);font-size:10px;margin-bottom:4px}.metric b{font-size:13px;overflow-wrap:anywhere}
+.foot{font-size:11px;color:var(--muted);line-height:1.5;margin-top:16px}
+@media(max-width:620px){.stats{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:1fr}h1{font-size:19px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+ <div><h1>BYBIT FUTURES SCANNER</h1><div class="sub">USDT Perpetual · 15 dakika · Sinyal / analiz ekranı</div></div>
+ <span class="pill">10x varsayım</span>
+</header>
+<section class="stats">
+ <div class="stat"><small>Veri kaynağı</small><b>Bybit V5</b></div>
+ <div class="stat"><small>Zaman dilimi</small><b>15 dakika</b></div>
+ <div class="stat"><small>Tarama evreni</small><b id="universe">—</b></div>
+ <div class="stat"><small>Sinyal sayısı</small><b id="count">—</b></div>
+</section>
+<div class="controls">
+ <button class="primary" id="scan">Şimdi tara</button>
+ <select id="limit"><option value="15">İlk 15 parite</option><option value="25" selected>İlk 25 parite</option><option value="40">İlk 40 parite</option></select>
+ <button id="clear">Sonuçları temizle</button>
+</div>
+<div class="status" id="status">Başlamak için “Şimdi tara” düğmesine dokun.</div>
+<div class="notice"><b>Önemli:</b> Bu ekran yalnızca herkese açık Bybit piyasa verilerini okur. API anahtarı kullanmaz ve emir göndermez. 10x, pozisyon hesaplama varsayımıdır; kâr garantisi değildir. Sinyaller teknik filtreye dayalıdır, yatırım tavsiyesi değildir.</div>
+<section class="panel">
+ <h2>Öne çıkan sinyaller</h2>
+ <div id="cards" class="cards"><div class="none">Henüz tarama yapılmadı.</div></div>
+</section>
+<section class="panel">
+ <h2>Tarama sonuçları</h2>
+ <div class="tablewrap"><table><thead><tr><th>Parite</th><th>Yön</th><th>Son fiyat</th><th>RSI</th><th>EMA20 / EMA50</th><th>24s hacim</th></tr></thead><tbody id="rows"><tr><td colspan="6" class="none">Henüz veri yok.</td></tr></tbody></table></div>
+</section>
+<div class="foot">Strateji özeti: EMA20/EMA50 trend filtresi, RSI14 momentum filtresi, ATR14 tabanlı stop mesafesi. TP1 = 1R, TP2 = 2R. Son tamamlanmış 15 dakikalık mum kullanılır. Piyasa verisi erişimi, Bybit'in bölgesel ve teknik erişim koşullarına bağlıdır. Sayfa açıkken manuel tarama yapılır; Safari kapalıyken arka planda otomatik tarama garantisi yoktur.</div>
+</main>
+<script>
+const API='https://api.bybit.com';
+const $=id=>document.getElementById(id);
+const fmt=(n,d=6)=>Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function get(path){
+ const r=await fetch(API+path,{headers:{'Accept':'application/json'}});
+ if(!r.ok) throw new Error('HTTP '+r.status+' - '+r.statusText);
+ const j=await r.json();
+ if(j.retCode!==0) throw new Error('Bybit '+j.retCode+': '+j.retMsg);
+ return j.result;
+}
+function ema(a,p){if(a.length<p)return null;let v=a.slice(0,p).reduce((x,y)=>x+y,0)/p, k=2/(p+1);for(let i=p;i<a.length;i++)v=a[i]*k+v*(1-k);return v}
+function rsi(a,p=14){let g=0,l=0;for(let i=a.length-p;i<a.length;i++){let x=a[i]-a[i-1];g+=Math.max(0,x);l+=Math.max(0,-x)}if(l===0)return 100;return 100-100/(1+(g/p)/(l/p))}
+function atr(h,l,c,p=14){let tr=[];for(let i=1;i<c.length;i++)tr.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));return tr.slice(-p).reduce((a,b)=>a+b,0)/p}
+function card(s){
+ let sign=s.side==='LONG'?1:-1, dist=Math.max(s.atr*1.5,s.price*.004);
+ let sl=s.price-sign*dist,tp1=s.price+sign*dist,tp2=s.price+sign*dist*2;
+ let riskPct=dist/s.price*100, notional=1000, qty=notional/s.price;
+ return `<article class="signal"><div class="signalhead"><h3>${s.symbol}</h3><span class="tag ${s.side.toLowerCase()}">${s.side} · 10x</span></div>
+ <div class="grid2">
+ <div class="metric"><small>Giriş referansı</small><b>${fmt(s.price)}</b></div>
+ <div class="metric"><small>RSI 14</small><b>${s.rsi.toFixed(1)}</b></div>
+ <div class="metric"><small>Stop Loss</small><b>${fmt(sl)}</b></div>
+ <div class="metric"><small>TP1 · 1R</small><b>${fmt(tp1)}</b></div>
+ <div class="metric"><small>TP2 · 2R</small><b>${fmt(tp2)}</b></div>
+ <div class="metric"><small>Stop mesafesi</small><b>%${riskPct.toFixed(2)}</b></div>
+ </div><div class="foot">1.000 USDT teminat varsayımıyla 10x nominal büyüklük: 10.000 USDT (yaklaşık ${fmt(qty*10,3)} adet). Komisyon, fonlama ve kayma hariçtir.</div></article>`;
+}
+async function scan(){
+ const btn=$('scan');btn.disabled=true;$('status').textContent='Bybit USDT perpetual pariteleri alınıyor…';$('cards').innerHTML='';$('rows').innerHTML='';
+ try{
+  const [inst,ticks]=await Promise.all([
+   get('/v5/market/instruments-info?category=linear&limit=1000'),
+   get('/v5/market/tickers?category=linear')
+  ]);
+  const allowed=new Set(inst.list.filter(x=>x.status==='Trading'&&x.contractType==='LinearPerpetual'&&x.quoteCoin==='USDT').map(x=>x.symbol));
+  const list=ticks.list.filter(x=>allowed.has(x.symbol)&&x.symbol.endsWith('USDT')&&Number(x.turnover24h)>5000000)
+   .sort((a,b)=>Number(b.turnover24h)-Number(a.turnover24h)).slice(0,Number($('limit').value));
+  $('universe').textContent=list.length;$('status').textContent=`${list.length} parite taranıyor. Lütfen bekle…`;
+  let results=[],errors=0;
+  for(let i=0;i<list.length;i++){
+   const t=list[i];
+   try{
+    const k=await get(`/v5/market/kline?category=linear&symbol=${t.symbol}&interval=15&limit=80`);
+    const cs=k.list.slice().reverse().slice(0,-1);
+    if(cs.length<55)continue;
+    const c=cs.map(x=>Number(x[4])),h=cs.map(x=>Number(x[2])),l=cs.map(x=>Number(x[3]));
+    const e20=ema(c,20),e50=ema(c,50),rv=rsi(c),av=atr(h,l,c),price=c[c.length-1];
+    let side=null;
+    if(e20>e50&&price>e20&&rv>=50&&rv<=67)side='LONG';
+    if(e20<e50&&price<e20&&rv>=33&&rv<=50)side='SHORT';
+    results.push({symbol:t.symbol,side,price,rsi:rv,ema20:e20,ema50:e50,atr:av,turnover:Number(t.turnover24h)});
+   }catch(e){errors++}
+   $('status').textContent=`Taranıyor: ${i+1}/${list.length}`;
+   await sleep(90);
+  }
+  const signals=results.filter(x=>x.side).sort((a,b)=>b.turnover-a.turnover);
+  $('count').textContent=signals.length;
+  $('cards').innerHTML=signals.length?signals.slice(0,8).map(card).join(''):'<div class="none">Bu taramada koşulları karşılayan sinyal bulunamadı. Bu da geçerli bir sonuçtur.</div>';
+  $('rows').innerHTML=results.sort((a,b)=>b.turnover-a.turnover).map(x=>`<tr><td><b>${x.symbol}</b></td><td class="${x.side?x.side.toLowerCase():'none'}">${x.side||'—'}</td><td>${fmt(x.price)}</td><td>${x.rsi.toFixed(1)}</td><td>${fmt(x.ema20,5)} / ${fmt(x.ema50,5)}</td><td>${(x.turnover/1e6).toFixed(1)}M</td></tr>`).join('');
+  $('status').textContent=`Tamamlandı · ${results.length} parite işlendi · ${signals.length} sinyal · ${errors} veri hatası · ${new Date().toLocaleTimeString('tr-TR')}`;
+ }catch(e){
+  $('status').textContent='Bağlantı hatası: '+e.message;
+  $('cards').innerHTML='<div class="none">Bybit verisi alınamadı. Sayfayı yenileyip tekrar deneyin. API erişimi ağ veya bölge kısıtlamasına tabi olabilir.</div>';
+  $('count').textContent='—';$('universe').textContent='—';
+ }finally{btn.disabled=false}
+}
+$('scan').addEventListener('click',scan);
+$('clear').addEventListener('click',()=>{$('cards').innerHTML='';$('rows').innerHTML='<tr><td colspan="6" class="none">Sonuçlar temizlendi.</td></tr>';$('status').textContent='Sonuçlar temizlendi.';$('count').textContent='—';$('universe').textContent='—'});
+</script>
+</body>
+</html>
