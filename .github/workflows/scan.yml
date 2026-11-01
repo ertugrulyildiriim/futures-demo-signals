@@ -1,5 +1,4 @@
-
-name: Futures Paper Trading Demo
+name: Bybit Demo Paper Trading
 
 on:
   workflow_dispatch:
@@ -10,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: futures-paper-trading
+  group: bybit-demo-paper-trading
   cancel-in-progress: false
 
 jobs:
@@ -19,34 +18,25 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
+      - name: Repository checkout
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
-      - name: Setup Python
+      - name: Python setup
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      
-      - name: Run paper trading scanner
+      - name: Run Bybit Demo bot
         env:
+          BYBIT_DEMO_API_KEY: ${{ secrets.BYBIT_DEMO_API_KEY }}
+          BYBIT_DEMO_API_SECRET: ${{ secrets.BYBIT_DEMO_API_SECRET }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          NTFY_SERVER: https://ntfy.sh
-          BINANCE_DEMO_API_KEY: ${{ secrets.BINANCE_DEMO_API_KEY }}
-          BINANCE_DEMO_API_SECRET: ${{ secrets.BINANCE_DEMO_API_SECRET }}
         run: python bot.py
-
 
       - name: Save paper trading state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add paper_state.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Update paper trading state"
-            git push
-          else
-            echo "State değişmedi."
-          fi
+          git diff --cached --quiet || git commit -m "Update Bybit demo paper trading state"
+          git push
