@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
-BASE = "https://fapi.binance.com"
+BASE = "https://demo-fapi.binance.com"
 INTERVAL = "15m"
 CAPITAL = 1500.0
 RISK = 0.01
