@@ -46,15 +46,32 @@ def notify(title, message):
         print("Bildirim hatası:", exc)
 
 
+
 def api(path, params=None):
     url = BASE + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
+
     req = urllib.request.Request(
-        url, headers={"User-Agent": "paper-demo-scanner/1.0"}
+        url,
+        headers={"User-Agent": "Mozilla/5.0 paper-demo-scanner/1.0"}
     )
-    with urllib.request.urlopen(req, timeout=20) as response:
-        return json.loads(response.read().decode())
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as response:
+            return json.loads(response.read().decode())
+
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        print("BINANCE HTTP HATASI:", exc.code)
+        print("HATA AÇIKLAMASI:", exc.reason)
+        print("SUNUCU YANITI:", body[:1000])
+        raise
+
+    except Exception as exc:
+        print("BINANCE BAĞLANTI HATASI:", repr(exc))
+        raise
+
 
 
 def load_state():
