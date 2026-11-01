@@ -1,5 +1,5 @@
 
-name: Futures Demo Signal Scanner
+name: Futures Paper Trading Demo
 
 on:
   workflow_dispatch:
@@ -7,32 +7,42 @@ on:
     - cron: "2,17,32,47 * * * *"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: futures-paper-trading
+  cancel-in-progress: false
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Send push test
-        env:
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: |
-          test -n "$NTFY_TOPIC"
-          curl --fail --silent --show-error \
-            -H "Title: Binance Bot Test" \
-            -d "iPhone push bağlantısı başarılı!" \
-            "https://ntfy.sh/$NTFY_TOPIC"
 
-      - name: Run scanner
+      - name: Run paper trading scanner
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_SERVER: https://ntfy.sh
         run: python bot.py
+
+      - name: Save paper trading state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add paper_state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update paper trading state"
+            git push
+          else
+            echo "State değişmedi."
+          fi
