@@ -1,18 +1,17 @@
-
+import hashlib
+import hmac
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
-import hmac
-import hashlib
-import urllib.error
 from datetime import datetime, timezone
 
-BASE = "https://demo-fapi.binance.com"
-API_KEY = os.getenv("BINANCE_DEMO_API_KEY", "").strip()
-API_SECRET = os.getenv("BINANCE_DEMO_API_SECRET", "").strip()
-INTERVAL = "15m"
+BASE = "https://api-demo.bybit.com"
+API_KEY = os.getenv("BYBIT_DEMO_API_KEY", "").strip()
+API_SECRET = os.getenv("BYBIT_DEMO_API_SECRET", "").strip()
+INTERVAL = "15"
 CAPITAL = 1500.0
 RISK = 0.01
 MAX_LEVERAGE = 3
@@ -22,9 +21,9 @@ MIN_VOLUME = 10_000_000
 MAX_SPREAD = 0.15
 MAX_SYMBOLS = 60
 STATE_FILE = "paper_state.json"
-
 TOPIC = os.getenv("NTFY_TOPIC", "").strip()
 NTFY_SERVER = os.getenv("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+RECV_WINDOW = "5000"
 
 
 def now():
@@ -33,89 +32,78 @@ def now():
 
 def notify(title, message):
     if not TOPIC:
-        print("NTFY_TOPIC ayarlanmamış:", title, message)
+        print("NTFY_TOPIC ayarlanmamis:", title, message)
         return
     try:
         req = urllib.request.Request(
             f"{NTFY_SERVER}/{TOPIC}",
             data=message.encode("utf-8"),
-            headers={
-                "Title": title,
-                "Priority": "default",
-                "Tags": "chart_with_upwards_trend"
-            },
-            method="POST"
-        )
-        urllib.request.urlopen(req, timeout=15).read()
+            headers={"Title": title, "Priority": "default",
+                     "Tags": "chart_with_upwards_trend"},
+            method="POST")
+        with urllib.request.urlopen(req, timeout=15) as response:
+            response.read()
     except Exception as exc:
-        print("Bildirim hatası:", exc)
+        print("Bildirim hatasi:", repr(exc))
 
 
-
-def api(path, params=None):
+def request_json(path, params=None, signed=False):
+    params = dict(params or {})
+    headers = {"User-Agent": "bybit-demo-paper-scanner/1.0"}
+    if signed:
+        if not API_KEY or not API_SECRET:
+            raise RuntimeError("BYBIT_DEMO_API_KEY veya BYBIT_DEMO_API_SECRET eksik")
+        timestamp = str(int(time.time() * 1000))
+        query = urllib.parse.urlencode(sorted(params.items()))
+        payload = timestamp + API_KEY + RECV_WINDOW + query
+        signature = hmac.new(API_SECRET.encode(), payload.encode(),
+                             hashlib.sha256).hexdigest()
+        headers.update({
+            "X-BAPI-API-KEY": API_KEY,
+            "X-BAPI-TIMESTAMP": timestamp,
+            "X-BAPI-RECV-WINDOW": RECV_WINDOW,
+            "X-BAPI-SIGN": signature})
     url = BASE + path
     if params:
-        url += "?" + urllib.parse.urlencode(params)
-
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 paper-demo-scanner/1.0"}
-    )
-
+        url += "?" + urllib.parse.urlencode(sorted(params.items()))
+    req = urllib.request.Request(url, headers=headers, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=20) as response:
-            return json.loads(response.read().decode())
-
+            data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
-        print("BINANCE HTTP HATASI:", exc.code)
-        print("HATA AÇIKLAMASI:", exc.reason)
-        print("SUNUCU YANITI:", body[:1000])
+        print("BYBIT HTTP HATASI:", exc.code, body[:1000])
         raise
+    if data.get("retCode", 0) != 0:
+        raise RuntimeError(f"Bybit API hatasi {data.get('retCode')}: {data.get('retMsg')}")
+    return data
 
-    except Exception as exc:
-        print("BINANCE BAĞLANTI HATASI:", repr(exc))
-        raise
-def signed_api(path, params=None):
-    if not API_KEY or not API_SECRET:
-        raise RuntimeError("Binance Demo API anahtarlari eksik")
 
-    params = dict(params or {})
-    params["timestamp"] = int(time.time() * 1000)
-    params["recvWindow"] = 5000
+def public_api(path, params=None):
+    return request_json(path, params, False)
 
-    query = urllib.parse.urlencode(params)
-    signature = hmac.new(
-        API_SECRET.encode("utf-8"),
-        query.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
 
-    url = BASE + path + "?" + query + "&signature=" + signature
+def private_api(path, params=None):
+    return request_json(path, params, True)
 
-    req = urllib.request.Request(
-        url,
-        headers={"X-MBX-APIKEY": API_KEY},
-        method="GET"
-    )
 
-    with urllib.request.urlopen(req, timeout=20) as response:
-        return json.loads(response.read().decode("utf-8"))
+def get_demo_usdt_balance():
+    data = private_api("/v5/account/wallet-balance",
+                       {"accountType": "UNIFIED", "coin": "USDT"})
+    for account in data.get("result", {}).get("list", []):
+        for coin in account.get("coin", []):
+            if coin.get("coin") == "USDT":
+                return coin.get("walletBalance", "0"), coin.get("equity", "0")
+    return "0", "0"
 
 
 def load_state():
     try:
         with open(STATE_FILE, "r", encoding="utf-8") as f:
-            state = json.load(f)
-        return state
+            return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {
-            "balance": CAPITAL,
-            "open": {},
-            "history": [],
-            "day": now().date().isoformat(),
-            "daily_pnl": 0.0
-        }
+        return {"balance": CAPITAL, "open": {}, "history": [],
+                "day": now().date().isoformat(), "daily_pnl": 0.0}
 
 
 def save_state(state):
@@ -136,150 +124,107 @@ def ema(values, period):
 def rsi(values, period=14):
     if len(values) < period + 1:
         return 50
-    changes = [values[i] - values[i - 1]
-               for i in range(1, len(values))]
+    changes = [values[i] - values[i - 1] for i in range(1, len(values))]
     gains = [max(x, 0) for x in changes[-period:]]
     losses = [max(-x, 0) for x in changes[-period:]]
-    avg_gain = sum(gains) / period
-    avg_loss = sum(losses) / period
+    avg_gain, avg_loss = sum(gains) / period, sum(losses) / period
     if avg_loss == 0:
         return 100
     return 100 - (100 / (1 + avg_gain / avg_loss))
 
 
 def atr(highs, lows, closes, period=14):
-    ranges = []
-    for i in range(1, len(closes)):
-        ranges.append(max(
-            highs[i] - lows[i],
-            abs(highs[i] - closes[i - 1]),
-            abs(lows[i] - closes[i - 1])
-        ))
-    if len(ranges) < period:
-        return None
-    return sum(ranges[-period:]) / period
+    ranges = [max(highs[i] - lows[i],
+                  abs(highs[i] - closes[i - 1]),
+                  abs(lows[i] - closes[i - 1]))
+              for i in range(1, len(closes))]
+    return sum(ranges[-period:]) / period if len(ranges) >= period else None
 
 
 def get_candidates():
-    info = api("/fapi/v1/exchangeInfo")
-    tickers = api("/fapi/v1/ticker/24hr")
-    books = api("/fapi/v1/ticker/bookTicker")
-
-    volume_map = {x["symbol"]: float(x["quoteVolume"]) for x in tickers}
-    book_map = {x["symbol"]: x for x in books}
-    current_ms = int(time.time() * 1000)
-    candidates = []
-
-    for item in info["symbols"]:
-        symbol = item["symbol"]
-        if (item.get("status") != "TRADING"
-                or item.get("contractType") != "PERPETUAL"
-                or item.get("quoteAsset") != "USDT"
+    info = public_api("/v5/market/instruments-info",
+                      {"category": "linear", "limit": 1000})["result"]["list"]
+    tickers = public_api("/v5/market/tickers",
+                         {"category": "linear"})["result"]["list"]
+    ticker_map = {x["symbol"]: x for x in tickers}
+    current_ms, candidates = int(time.time() * 1000), []
+    for item in info:
+        symbol = item.get("symbol", "")
+        if (item.get("status") != "Trading"
+                or item.get("contractType") != "LinearPerpetual"
+                or item.get("quoteCoin") != "USDT"
                 or not symbol.endswith("USDT")):
             continue
-
-        volume = volume_map.get(symbol, 0)
-        book = book_map.get(symbol)
-        if volume < MIN_VOLUME or not book:
+        ticker = ticker_map.get(symbol)
+        if not ticker or float(ticker.get("turnover24h", 0) or 0) < MIN_VOLUME:
             continue
-
-        bid = float(book["bidPrice"])
-        ask = float(book["askPrice"])
+        bid = float(ticker.get("bid1Price", 0) or 0)
+        ask = float(ticker.get("ask1Price", 0) or 0)
         mid = (bid + ask) / 2
-        if mid <= 0:
+        if mid <= 0 or (ask - bid) / mid * 100 > MAX_SPREAD:
             continue
-
-        spread = (ask - bid) / mid * 100
-        if spread > MAX_SPREAD:
+        launch = int(item.get("launchTime", 0) or 0)
+        if launch and current_ms - launch < 30 * 86400000:
             continue
-
-        onboard = item.get("onboardDate", 0)
-        if onboard and current_ms - onboard < 30 * 86400000:
-            continue
-
-        candidates.append((symbol, volume))
-
+        candidates.append((symbol, float(ticker.get("turnover24h", 0))))
     candidates.sort(key=lambda x: x[1], reverse=True)
     return [x[0] for x in candidates[:MAX_SYMBOLS]]
 
 
 def get_signal(symbol):
-    candles = api("/fapi/v1/klines", {
-        "symbol": symbol, "interval": INTERVAL, "limit": 100
-    })
-    if len(candles) < 60:
+    rows = public_api("/v5/market/kline",
+                      {"category": "linear", "symbol": symbol,
+                       "interval": INTERVAL, "limit": 100})["result"]["list"]
+    if len(rows) < 60:
         return None
-
-    # Son mum henüz kapanmamış olabilir; yalnızca kapanmış mumları kullan.
-    candles = candles[:-1]
+    candles = list(reversed(rows))[:-1]  # son acik mum haric
     closes = [float(x[4]) for x in candles]
     highs = [float(x[2]) for x in candles]
     lows = [float(x[3]) for x in candles]
-
-    fast = ema(closes, 20)
-    slow = ema(closes, 50)
-    current_rsi = rsi(closes)
-    current_atr = atr(highs, lows, closes)
-
+    fast, slow = ema(closes, 20), ema(closes, 50)
+    current_rsi, current_atr = rsi(closes), atr(highs, lows, closes)
     if not fast or not slow or not current_atr:
         return None
-
     price = closes[-1]
-    if current_atr / price < 0.001:
+    if price <= 0 or current_atr / price < 0.001:
         return None
-
     if fast > slow and price > fast and 48 <= current_rsi <= 67:
         side = "LONG"
     elif fast < slow and price < fast and 33 <= current_rsi <= 52:
         side = "SHORT"
     else:
         return None
+    return {"side": side, "price": price, "atr": current_atr}
 
-    return {
-        "side": side,
-        "price": price,
-        "atr": current_atr
-    }
+
+def get_last_price(symbol):
+    rows = public_api("/v5/market/tickers",
+                      {"category": "linear", "symbol": symbol})["result"]["list"]
+    if not rows:
+        raise RuntimeError(f"{symbol} fiyat bilgisi gelmedi")
+    return float(rows[0]["lastPrice"])
 
 
 def close_position(state, symbol, price, reason):
     pos = state["open"].pop(symbol)
-    if pos["side"] == "LONG":
-        pnl = (price - pos["entry"]) * pos["qty"]
-    else:
-        pnl = (pos["entry"] - price) * pos["qty"]
-
+    pnl = ((price - pos["entry"]) if pos["side"] == "LONG"
+           else (pos["entry"] - price)) * pos["qty"]
     state["balance"] += pnl
     state["daily_pnl"] += pnl
-
-    trade = {
-        "symbol": symbol,
-        "side": pos["side"],
-        "entry": pos["entry"],
-        "exit": price,
-        "pnl": round(pnl, 2),
-        "reason": reason,
-        "closed_at": now().isoformat()
-    }
-    state["history"].append(trade)
-    state["history"] = state["history"][-200:]
-
-    notify(
-        f"Sanal işlem kapandı: {symbol}",
-        f"{pos['side']} | Kapanış: {price:.6g} | "
-        f"Sonuç: {pnl:+.2f} USDT | Sebep: {reason} | "
-        f"Sanal bakiye: {state['balance']:.2f} USDT"
-    )
+    trade = {"symbol": symbol, "side": pos["side"], "entry": pos["entry"],
+             "exit": price, "pnl": round(pnl, 2), "reason": reason,
+             "closed_at": now().isoformat()}
+    state["history"] = (state["history"] + [trade])[-200:]
+    notify(f"Sanal islem kapandi: {symbol}",
+           f"{pos['side']} | Kapanis: {price:.6g} | Sonuc: {pnl:+.2f} USDT "
+           f"| Sebep: {reason} | Sanal bakiye: {state['balance']:.2f} USDT")
     print("KAPANDI:", trade)
 
 
 def manage_positions(state):
-    for symbol in list(state["open"].keys()):
+    for symbol in list(state["open"]):
         try:
-            data = api("/fapi/v1/ticker/price", {"symbol": symbol})
-            price = float(data["price"])
-            pos = state["open"][symbol]
-
+            price, pos = get_last_price(symbol), state["open"][symbol]
             if pos["side"] == "LONG":
                 if price <= pos["stop"]:
                     close_position(state, symbol, price, "Stop Loss")
@@ -290,116 +235,65 @@ def manage_positions(state):
                     close_position(state, symbol, price, "Stop Loss")
                 elif price <= pos["target"]:
                     close_position(state, symbol, price, "Take Profit")
-
         except Exception as exc:
-            print("Pozisyon kontrol hatası:", symbol, exc)
+            print("Pozisyon kontrol hatasi:", symbol, repr(exc))
 
 
 def open_position(state, symbol, signal):
-    if symbol in state["open"]:
+    if (symbol in state["open"] or len(state["open"]) >= MAX_POSITIONS
+            or state["daily_pnl"] <= -MAX_DAILY_LOSS):
         return
-    if len(state["open"]) >= MAX_POSITIONS:
-        return
-    if state["daily_pnl"] <= -MAX_DAILY_LOSS:
-        return
-
-    side = signal["side"]
-    entry = signal["price"]
+    side, entry = signal["side"], signal["price"]
     distance = max(signal["atr"] * 1.5, entry * 0.004)
-
-    if side == "LONG":
-        stop = entry - distance
-        target = entry + distance * 2
-    else:
-        stop = entry + distance
-        target = entry - distance * 2
-
+    stop, target = ((entry - distance, entry + distance * 2) if side == "LONG"
+                    else (entry + distance, entry - distance * 2))
     risk_amount = min(state["balance"] * RISK, 15.0)
-    qty = risk_amount / distance
-
-    # 3x kaldıraç sınırı: sanal pozisyon büyüklüğü üst limiti.
-    max_notional = state["balance"] * MAX_LEVERAGE
-    qty = min(qty, max_notional / entry)
-
+    qty = min(risk_amount / distance, state["balance"] * MAX_LEVERAGE / entry)
     if qty <= 0:
         return
-
     actual_risk = qty * distance
     state["open"][symbol] = {
-        "side": side,
-        "entry": entry,
-        "stop": stop,
-        "target": target,
-        "qty": qty,
-        "risk": actual_risk,
-        "opened_at": now().isoformat()
-    }
-
-    notify(
-        f"Yeni sanal işlem: {symbol} {side}",
-        f"Giriş: {entry:.6g} | Stop: {stop:.6g} | "
-        f"Hedef: {target:.6g} | Tahmini risk: {actual_risk:.2f} USDT | "
-        f"Sanal bakiye: {state['balance']:.2f} USDT"
-    )
-    print("AÇILDI:", symbol, state["open"][symbol])
+        "side": side, "entry": entry, "stop": stop, "target": target,
+        "qty": qty, "risk": actual_risk, "opened_at": now().isoformat()}
+    notify(f"Yeni sanal islem: {symbol} {side}",
+           f"Giris: {entry:.6g} | Stop: {stop:.6g} | Hedef: {target:.6g} "
+           f"| Tahmini risk: {actual_risk:.2f} USDT "
+           f"| Sanal bakiye: {state['balance']:.2f} USDT")
+    print("ACILDI:", symbol, state["open"][symbol])
 
 
 def main():
-    balance_rows = signed_api("/fapi/v3/balance")
-    usdt = next(
-        (item for item in balance_rows if item.get("asset") == "USDT"),
-        None
-    )
-
-    if usdt is None:
-        raise RuntimeError("Demo hesabinda USDT bakiyesi bulunamadi")
-
-    print("BINANCE DEMO USDT Bakiyesi:", usdt["balance"])
-    print("Kullanilabilir USDT:", usdt["availableBalance"])
+    wallet, equity = get_demo_usdt_balance()
+    print("BYBIT DEMO USDT Cuzdan Bakiyesi:", wallet)
+    print("BYBIT DEMO USDT Equity:", equity)
     state = load_state()
     today = now().date().isoformat()
-
     if state.get("day") != today:
-        state["day"] = today
-        state["daily_pnl"] = 0.0
-
+        state["day"], state["daily_pnl"] = today, 0.0
     print("Sanal bakiye:", state["balance"])
-    print("Açık pozisyon:", len(state["open"]))
-
+    print("Acik sanal pozisyon:", len(state["open"]))
     manage_positions(state)
-
     if state["daily_pnl"] <= -MAX_DAILY_LOSS:
-        print("Günlük zarar sınırı doldu. Yeni işlem açılmayacak.")
+        print("Gunluk zarar siniri doldu. Yeni sanal islem acilmayacak.")
         save_state(state)
         return
-
-    try:
-        symbols = get_candidates()
-        print("Taranacak uygun parite:", len(symbols))
-
-        for symbol in symbols:
-            if symbol in state["open"]:
-                continue
-            if len(state["open"]) >= MAX_POSITIONS:
-                break
-            if state["daily_pnl"] <= -MAX_DAILY_LOSS:
-                break
-
-            try:
-                signal = get_signal(symbol)
-                if signal:
-                    open_position(state, symbol, signal)
-                time.sleep(0.12)
-            except Exception as exc:
-                print("Sembol atlandı:", symbol, exc)
-
-    except Exception as exc:
-        print("Tarama hatası:", exc)
-
+    symbols = get_candidates()
+    print("Taranacak uygun parite:", len(symbols))
+    for symbol in symbols:
+        if symbol in state["open"]:
+            continue
+        if len(state["open"]) >= MAX_POSITIONS or state["daily_pnl"] <= -MAX_DAILY_LOSS:
+            break
+        try:
+            signal = get_signal(symbol)
+            if signal:
+                open_position(state, symbol, signal)
+            time.sleep(0.12)
+        except Exception as exc:
+            print("Sembol atlandi:", symbol, repr(exc))
     save_state(state)
-    print("Tarama tamamlandı.")
-    print("Sanal bakiye:", round(state["balance"], 2))
-    print("Açık pozisyon:", len(state["open"]))
+    print("Tarama tamamlandi. Sanal bakiye:", round(state["balance"], 2))
+    print("Acik sanal pozisyon:", len(state["open"]))
 
 
 if __name__ == "__main__":
