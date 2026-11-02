@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1220"><title>Bybit Futures V10 · Realtime Scanner</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--p:#142136;--line:#2b3c56;--muted:#9fb0c7;--txt:#edf4ff;--green:#29c58b;--red:#f27480;--blue:#3985ee;--amber:#f4c15d}*{box-sizing:border-box}body{margin:0;background:linear-gradient(#101c2f,#0b1220 320px);color:var(--txt);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1100px;margin:auto;padding:18px 14px 45px}h1{font-size:21px;margin:0 0 5px}h2{font-size:16px;margin:0 0 12px}.sub,small{color:var(--muted)}.sub{font-size:13px}.panel,.stat{background:var(--p);border:1px solid var(--line);border-radius:14px}.panel{padding:14px;margin-top:13px}.head{display:flex;justify-content:space-between;gap:10px;align-items:center}.tag{font-size:11px;border:1px solid #42618a;border-radius:30px;padding:6px 9px;color:#b9d4ff}.notice{background:#1d2b40;border-left:3px solid var(--amber);padding:11px;border-radius:8px;color:#dce7f6;font-size:12px;line-height:1.55;margin-top:13px}.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}.field select,.field input,button{width:100%;background:#1c2c44;border:1px solid #3a506f;color:var(--txt);padding:11px;border-radius:10px;font-size:14px}.actions{display:flex;gap:9px;margin-top:12px}button.primary{background:#246dce;border-color:#4389e6;font-weight:700}button:disabled{opacity:.5}.status{font-size:13px;color:var(--muted);margin:12px 2px;min-height:20px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.stat{padding:12px}.stat small{display:block;font-size:11px;margin-bottom:7px}.stat b{font-size:18px}.good,.long{color:var(--green)}.bad,.short{color:var(--red)}.muted{color:var(--muted)}.wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:790px;font-size:12px}th,td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted)}.foot{font-size:11px;color:var(--muted);line-height:1.55;margin-top:10px}.check{display:flex;align-items:center;gap:8px;padding:10px;background:#1a2a40;border-radius:9px;font-size:12px;margin-top:8px}.check input{width:auto}.pill{display:inline-block;padding:4px 7px;border-radius:20px;font-size:10px;background:#263851}.pill.early{color:var(--amber)}.pill.confirm{color:var(--green)}.bar{height:7px;background:#263851;border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:#64a4ff}@media(max-width:650px){.controls{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:repeat(2,1fr)}h1{font-size:19px}}
+</style></head><body><main>
+<div class="head"><div><h1>BYBIT FUTURES · V10 REALTIME</h1><div class="sub">USDT Perpetual · 15 dakika · LONG / SHORT · WebSocket</div></div><span class="tag">Emir göndermez</span></div>
+<div class="notice"><b>Canlı tarama:</b> Piyasa verisi WebSocket üzerinden alınır; her fiyat güncellemesinde REST isteği yapılmaz. Erken uyarı açık mumda, onaylı sinyal kapanmış mumda oluşur. İlk veri yüklemesi seçilen coin sayısına göre biraz sürebilir. Bu araç emir göndermez; sinyaller kârlılık garantisi değildir.</div>
+<section class="panel"><h2>Tarama ayarları</h2><div class="controls">
+<div class="field"><label>Takip edilecek coin</label><select id="universe"><option value="25">İlk 25 hacim</option><option value="50" selected>İlk 50 hacim</option><option value="100">İlk 100 hacim</option></select></div>
+<div class="field"><label>Minimum 24s hacim (USDT milyon)</label><select id="minTurn"><option value="1">1 milyon</option><option value="5" selected>5 milyon</option><option value="10">10 milyon</option><option value="20">20 milyon</option></select></div>
+<div class="field"><label>Minimum ADX</label><input id="adx" type="number" min="8" max="40" step="1" value="16"></div>
+<div class="field"><label>Hedef (R)</label><select id="rr"><option value="1.5">1,5R</option><option value="2" selected>2R</option></select></div>
+<div class="field"><label>Tek yön komisyon (%)</label><input id="fee" type="number" value="0.055" min="0" max="1" step="0.005"></div>
+<div class="field"><label>Tek yön kayma tahmini (%)</label><input id="slip" type="number" value="0.02" min="0" max="1" step="0.005"></div>
+</div><div class="check"><input id="btc" type="checkbox" checked><label for="btc">Kapanmış 1 saatlik BTC ters trend filtresi</label></div><div class="check"><input id="early" type="checkbox" checked><label for="early">Açık mumda erken uyarıları göster</label></div><div class="actions"><button class="primary" id="start">Canlı taramayı başlat</button><button id="stop">Durdur</button></div><div class="status" id="status">Başlatılmayı bekliyor.</div><div class="bar"><i id="progress"></i></div></section>
+<section class="panel"><h2>Hızlı geçmiş simülasyonu · 30 gün</h2>
+<div class="controls">
+<div class="field"><label>Coin sayısı</label><select id="btUniverse"><option value="25">İlk 25 hacim</option><option value="50" selected>İlk 50 hacim</option></select></div>
+<div class="field"><label>Test dönemi</label><select id="btDays"><option value="7">Son 7 gün</option><option value="14">Son 14 gün</option><option value="30" selected>Son 30 gün</option></select></div>
+<div class="field"><label>Simülasyon</label><select id="btCount"><option value="all" selected>30 gündeki tüm uygun işlemler</option><option value="50">İlk 50 işlem (hızlı kontrol)</option></select></div>
+</div>
+<div class="actions"><button class="primary" id="btStart">Geçmiş veride hızlı simülasyonu başlat</button></div>
+<div class="status" id="btStatus">Canlı taramadan bağımsız çalışır; emir göndermez.</div>
+<div class="stats" id="btStats"><div class="stat"><small>İşlem</small><b>0</b></div><div class="stat"><small>Kazanma</small><b>—</b></div><div class="stat"><small>Net R</small><b>—</b></div><div class="stat"><small>Profit factor</small><b>—</b></div></div>
+<div class="stats" id="btExtraStats"></div>
+<h3>Model / yön / dönem kırılımı</h3>
+<div class="wrap"><table><thead><tr><th>Grup</th><th>İşlem</th><th>Kazanma %</th><th>Net R</th><th>PF</th></tr></thead><tbody id="btBreakdown"><tr><td colspan="5">Henüz sonuç yok.</td></tr></tbody></table></div>
+<div class="wrap"><table><thead><tr><th>#</th><th>Coin</th><th>Model</th><th>Yön</th><th>Giriş zamanı UTC</th><th>Giriş</th><th>Stop</th><th>Hedef</th><th>Çıkış</th><th>Sonuç</th><th>Net R</th></tr></thead><tbody id="btRows"><tr><td colspan="11">Henüz simülasyon yapılmadı.</td></tr></tbody></table></div>
+<div class="foot">Aynı A/B strateji koşulları, ADX, hacim, BTC filtresi, stop/2R hedef, 0,25R giriş sapma limiti ve 8 saatlik azami süre kullanılır. Sinyal kapanmış mumdan, giriş sonraki mum açılışından alınır. R hesabı gerçek giriş ile stop arasındaki mesafeye göre yapılır. Aynı mumda stop/hedef birlikte görülürse STOP varsayılır. Komisyon ve kayma giriş/çıkış nominali üzerinden düşülür. Eşzamanlı pozisyon kapasitesi ve maksimum düşüş, gerçekleşen çıkış zamanlarına göre hesaplanır. Bu geçmiş veri simülasyonudur; canlı sonuç garantisi değildir.</div>
+</section>\n<section class="panel"><h2>Canlı durum</h2><div class="stats" id="stats"><div class="stat"><small>Takip edilen</small><b>0</b></div><div class="stat"><small>WebSocket</small><b>Kapalı</b></div><div class="stat"><small>Sinyal</small><b>0</b></div><div class="stat"><small>Son güncelleme</small><b>—</b></div></div><div class="foot" id="latency">İlk yüklemede geçmiş mumlar alınır; sonrasında güncellemeler WebSocket akışından gelir.</div></section>
+<section class="panel"><h2>Aktif sinyaller</h2><div class="wrap"><table><thead><tr><th>Coin</th><th>Model</th><th>Yön</th><th>Durum</th><th>Giriş</th><th>Stop</th><th>Hedef</th><th>Stop %</th><th>Tahmini maliyet R</th><th>UTC</th></tr></thead><tbody id="signals"><tr><td colspan="10">Henüz sinyal yok.</td></tr></tbody></table></div><div class="foot">A: trend içi geri çekilme. B: 20 mumluk sıkışma kırılımı. Erken uyarılar mum kapanmadan iptal olabilir. Onaylı sinyal yalnızca 15 dakikalık mum kapandığında sabitlenir. Sinyal tablosu yatırım tavsiyesi değildir.</div></section>
+<section class="panel"><h2>Sinyale yaklaşan coinler</h2>
+<div class="stats" id="nearStats"><div class="stat"><small>Son değerlendirme</small><b>0</b></div><div class="stat"><small>Uygun değil</small><b>0</b></div><div class="stat"><small>Yakın aday</small><b>0</b></div><div class="stat"><small>Onaylı</small><b>0</b></div></div>
+<div class="wrap"><table><thead><tr><th>Coin</th><th>Model</th><th>Yön eğilimi</th><th>Durum</th><th>ADX</th><th>Hacim x</th><th>RSI</th><th>Eksik koşul</th><th>UTC</th></tr></thead><tbody id="nearRows"><tr><td colspan="9">İlk değerlendirme bekleniyor.</td></tr></tbody></table></div>
+<div class="foot">Bu bölüm sinyal üretmez ve eşikleri gevşetmez. Her coin/model için son mum değerlendirmesini ve eksik koşulları gösterir. “Yakın aday” yalnızca izleme önceliğidir; işlem sinyali değildir.</div></section>
+<section class="panel"><h2>İlk 10 onaylı sinyal · Demo takip</h2>
+<div class="stats" id="paperStats"><div class="stat"><small>Takipte</small><b>0</b></div><div class="stat"><small>Tamamlanan</small><b>0/10</b></div><div class="stat"><small>Net R</small><b>0</b></div><div class="stat"><small>Sonuç</small><b>Bekleniyor</b></div></div>
+<div class="wrap"><table><thead><tr><th>Coin</th><th>Model</th><th>Yön</th><th>Sinyal fiyatı</th><th>Varsayılan giriş</th><th>Stop</th><th>Hedef</th><th>Durum</th><th>Net R</th><th>Takip süresi</th></tr></thead><tbody id="paperRows"><tr><td colspan="10">Henüz takip edilen sinyal yok.</td></tr></tbody></div>
+<div class="foot">Yalnızca onaylı sinyaller izlenir. Sinyalden sonraki ilk 15 dakikalık mumun açılışı varsayılan giriş kabul edilir; açılış sinyal fiyatından 0,25R'den fazla uzaksa giriş iptal edilir. Stop/hedef önceliklidir; ikisi aynı mumda görülürse STOP kabul edilir. En fazla 8 saat takip edilir; süre dolunca son mum kapanışından zaman çıkışı yapılır. Net R'den tahmini gidiş-dönüş komisyon ve kayma düşülür. Kayıtlar bu cihazın tarayıcısında saklanır. Bu takip gerçek dolum değildir.</div></section>
+<section class="panel"><h2>Canlı teşhis</h2><div class="stats" id="diagStats">
+<div class="stat"><small>WebSocket mesajı</small><b>0</b></div><div class="stat"><small>Mum güncellemesi</small><b>0</b></div>
+<div class="stat"><small>Abonelik onayı</small><b>0</b></div><div class="stat"><small>Veri gecikmesi</small><b>—</b></div></div>
+<div id="gates" class="grid2"></div>
+<div class="foot" id="notes">Bağlantı kurulduğunda teknik durum burada gösterilir.</div></section>
+<script>
+'use strict';
+const API='https://api.bybit.com',WS='wss://stream.bybit.com/v5/public/linear';
+const $=id=>document.getElementById(id),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let running=false,ws=null,symbols=[],bars=new Map(),signals=new Map(),lastUpdate=0,btcBars=[],reconnectTimer=null,watchdog=null,subscribed=false,paper=loadPaper(),nearMiss=new Map(),evalCount=0,nearCount=0;
+const PAPER_KEY='bybit_v10_4_paper_v2';
+function loadPaper(){try{let a=JSON.parse(localStorage.getItem(PAPER_KEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
+function savePaper(){try{localStorage.setItem(PAPER_KEY,JSON.stringify(paper))}catch(e){$('notes').textContent='Uyarı: Bu tarayıcıda demo takip kayıtları saklanamadı.'}}
+function elapsedLabel(ms){let n=Math.max(0,Math.ceil(ms/60000));return Math.floor(n/60)+'s '+(n%60)+'d'}
+const diag={messages:0,klines:0,acks:0,lastMsg:0,gateSeen:new Set(),gates:{bars:0,adx:0,btc:0,volume:0,pattern:0,cost:0,signals:0}};
+function countGate(name,b,model,sym){let k=name+'|'+sym+'|'+model+'|'+b.at(-1).t;if(diag.gateSeen.has(k))return;diag.gateSeen.add(k);diag.gates[name]++}
+async function api(path){const r=await fetch(API+path,{cache:'no-store'});if(!r.ok)throw Error('Bybit HTTP '+r.status);const j=await r.json();if(j.retCode!==0)throw Error(j.retMsg||'Bybit API hatası');return j.result}
+async function mapLimit(items,limit,fn){let next=0,done=0;const workers=Array.from({length:Math.min(limit,items.length)},async()=>{while(next<items.length){const i=next++;await fn(items[i],i);done++;$('progress').style.width=(done/items.length*100)+'%';$('status').textContent=`Geçmiş mumlar hazırlanıyor: ${done}/${items.length}`}});await Promise.all(workers)}
+function ema(a,p){if(a.length<p)return NaN;let v=a.slice(0,p).reduce((s,x)=>s+x,0)/p,k=2/(p+1);for(let i=p;i<a.length;i++)v=a[i]*k+v*(1-k);return v}
+function rsi(a,p=14){if(a.length<=p)return 50;let g=0,l=0;for(let i=a.length-p;i<a.length;i++){let d=a[i]-a[i-1];g+=Math.max(0,d);l+=Math.max(0,-d)}return l?100-100/(1+g/l):100}
+function atr(b,p=14){if(b.length<p+1)return 0;let z=[];for(let i=1;i<b.length;i++)z.push(Math.max(b[i].h-b[i].l,Math.abs(b[i].h-b[i-1].c),Math.abs(b[i].l-b[i-1].c)));return z.slice(-p).reduce((s,x)=>s+x,0)/p}
+function adx(b,p=14){if(b.length<2*p+2)return 0;let tr=[],pd=[],md=[];for(let i=1;i<b.length;i++){let x=b[i],q=b[i-1],u=x.h-q.h,d=q.l-x.l;tr.push(Math.max(x.h-x.l,Math.abs(x.h-q.c),Math.abs(x.l-q.c)));pd.push(u>d&&u>0?u:0);md.push(d>u&&d>0?d:0)}let st=tr.slice(0,p).reduce((a,v)=>a+v,0),sp=pd.slice(0,p).reduce((a,v)=>a+v,0),sm=md.slice(0,p).reduce((a,v)=>a+v,0),dx=[];for(let i=p;i<tr.length;i++){if(i>p){st=st-st/p+tr[i];sp=sp-sp/p+pd[i];sm=sm-sm/p+md[i]}let plus=st?100*sp/st:0,minus=st?100*sm/st:0;dx.push(plus+minus?100*Math.abs(plus-minus)/(plus+minus):0)}if(dx.length<p)return 0;let v=dx.slice(0,p).reduce((a,x)=>a+x,0)/p;for(let i=p;i<dx.length;i++)v=(v*(p-1)+dx[i])/p;return v}
+function btcTrend(){if(btcBars.length<205)return null;let c=btcBars.map(x=>x.c),e50=ema(c,50),e200=ema(c,200);return c.at(-1)>e50&&e50>e200?'LONG':c.at(-1)<e50&&e50<e200?'SHORT':null}
+function evaluate(b,model,closed,sym){
+ const stamp=b.at(-1)?.t||0;
+ const record=(reason,side,ax,vr,rv,missing,score)=>{
+  evalCount++;
+  let key=sym+'|'+model;
+  nearMiss.set(key,{sym,model,side:side||'—',reason,adx:ax||0,vol:vr||0,rsi:rv||0,missing,score:score||0,time:stamp,closed});
+  if(score>=2&&reason!=='ONAYLI')nearCount++;
+  if(reason!=='ONAYLI')countGate(reason==='YETERSIZ MUM'?'bars':reason==='ADX'?'adx':reason==='HACIM'?'volume':reason==='BTC TERS'?'btc':reason==='MALIYET'?'cost':'pattern',b,model,sym);
+ };
+ if(b.length<220){record('YETERSIZ MUM','—',0,0,0,'Geçmiş mum',0);return null}
+ let a=b,c=a.map(x=>x.c),f=a.at(-1),e20=ema(c,20),e50=ema(c,50),e50old=ema(c.slice(0,-5),50),ax=adx(a),rv=rsi(c),av=atr(a);
+ let avg=a.slice(-21,-1).reduce((sum,x)=>sum+x.v,0)/20,vr=avg?f.v/avg:0;
+ let side=null,trendSide=e20>e50&&e50>e50old?'LONG':e20<e50&&e50<e50old?'SHORT':null;
+ let pattern=false,patternReason='';
+ if(model==='A'){
+  if(trendSide==='LONG'&&f.c>f.o&&f.c>e20&&rv>=48&&rv<=62){side='LONG';pattern=true}
+  if(trendSide==='SHORT'&&f.c<f.o&&f.c<e20&&rv>=38&&rv<=52){side='SHORT';pattern=true}
+  patternReason='Trend/geri çekilme/mum/RSI';
+ }else{
+  let prev=a.slice(-21,-1),hi=Math.max(...prev.map(x=>x.h)),lo=Math.min(...prev.map(x=>x.l));
+  if(f.c>hi&&f.c>f.o&&rv>=55&&rv<=72){side='LONG';pattern=true}
+  if(f.c<lo&&f.c<f.o&&rv>=28&&rv<=45){side='SHORT';pattern=true}
+  patternReason='20 mum kırılımı/mum/RSI';
+ }
+ let minVol=model==='A'?1.1:1.25,adxOk=ax>=+$('adx').value,volOk=vr>=minVol,bt=btcTrend(),btcOk=!$('btc').checked||!bt||!side||bt===side;
+ let score=(adxOk?1:0)+(volOk?1:0)+(pattern?1:0)+(btcOk?1:0);
+ let missing=[];
+ if(!adxOk)missing.push('ADX '+ax.toFixed(1)+'/'+$('adx').value);
+ if(!volOk)missing.push('Hacim '+vr.toFixed(2)+'x/'+minVol+'x');
+ if(!pattern)missing.push(patternReason);
+ if(pattern&&side&&$('btc').checked&&bt&&bt!==side){missing.push('BTC ters trend');btcOk=false}
+ if(!adxOk){record('ADX',side,ax,vr,rv,missing.join(' · '),score);return null}
+ if(!volOk){record('HACIM',side,ax,vr,rv,missing.join(' · '),score);return null}
+ if(!pattern){record('DESEN',side||trendSide,ax,vr,rv,missing.join(' · '),score);return null}
+ if(!btcOk){record('BTC TERS',side,ax,vr,rv,missing.join(' · '),score);return null}
+ let dir=side==='LONG'?1:-1,raw=dir===1?Math.min(...a.slice(-10).map(x=>x.l))-av*.5:Math.max(...a.slice(-10).map(x=>x.h))+av*.5;
+ let dist=Math.max(dir===1?f.c-raw:raw-f.c,av*1.5),stop=f.c-dir*dist,rr=+$('rr').value,target=f.c+dir*dist*rr,stopPct=dist/f.c*100;
+ let fee=+$('fee').value,slip=+$('slip').value,costR=((fee+slip)/100)*(f.c+(f.c+dir*dist*rr))/dist;
+ if(stopPct>2.5||costR>.35){missing.push('Stop/maliyet limiti');record('MALIYET',side,ax,vr,rv,missing.join(' · '),score);return null}
+ record('ONAYLI',side,ax,vr,rv,'Koşullar tamam',4);
+ diag.gates.signals++;
+ return {side,entry:f.c,stop,target,stopPct,costR,adx:ax,rsi:rv,time:f.t,closed};
+}
+function addPaperSignal(sym,model,s){
+ if(!s.closed||paper.length>=10)return;
+ let key=`${sym}|${model}|${s.side}|${s.time}`;
+ if(paper.some(x=>x.key===key))return;
+ paper.push({key,sym,model,side:s.side,signalPrice:s.entry,entry:null,stop:s.stop,target:s.target,signalTime:s.time,expiresAt:s.time+8*3600000,status:'GİRİŞ BEKLİYOR',net:null,exit:null,createdAt:Date.now(),exitTime:null});
+ savePaper();renderPaper();
+}
+function updatePaper(sym,candle){
+ let changed=false;
+ for(const p of paper){
+  if(!['GİRİŞ BEKLİYOR','TAKİPTE'].includes(p.status)||p.sym!==sym||candle.t<=p.signalTime)continue;
+  let long=p.side==='LONG';
+  if(p.status==='GİRİŞ BEKLİYOR'){
+   let risk=Math.abs(p.signalPrice-p.stop),gap=Math.abs(candle.o-p.signalPrice);
+   if(!risk||gap>risk*.25){p.status='GİRİŞ İPTAL';p.exit=candle.o;p.exitTime=candle.t;changed=true;continue}
+   p.entry=candle.o;p.status='TAKİPTE';changed=true;
+  }
+  let sl=long?candle.l<=p.stop:candle.h>=p.stop,tp=long?candle.h>=p.target:candle.l<=p.target;
+  if(sl){
+   p.exit=long&&candle.o<p.stop?candle.o:(!long&&candle.o>p.stop?candle.o:p.stop);
+   p.status='STOP';p.gross=(long?1:-1)*(p.exit-p.entry)/Math.abs(p.entry-p.stop);
+   p.costR=(+$('fee').value/100*2*p.entry + +$('slip').value/100*2*p.entry)/Math.abs(p.entry-p.stop);
+   p.net=p.gross-p.costR;
+   p.exitTime=candle.t+900000;changed=true;
+  }else if(tp){
+   p.exit=p.target;p.status='HEDEF';p.gross=(long?1:-1)*(p.exit-p.entry)/Math.abs(p.entry-p.stop);
+   p.costR=(+$('fee').value/100*2*p.entry + +$('slip').value/100*2*p.entry)/Math.abs(p.entry-p.stop);
+   p.net=p.gross-p.costR;
+   p.exitTime=candle.t+900000;changed=true;
+  }else if(candle.t+900000>=p.expiresAt){
+   p.exit=candle.c;p.status='SÜRE DOLDU';p.gross=(long?1:-1)*(p.exit-p.entry)/Math.abs(p.entry-p.stop);
+   p.costR=(+$('fee').value/100*2*p.entry + +$('slip').value/100*2*p.entry)/Math.abs(p.entry-p.stop);
+   p.net=p.gross-p.costR;
+   p.exitTime=candle.t+900000;changed=true;
+  }
+ }
+ if(changed)savePaper();
+ renderPaper();
+}
+function renderPaper(){
+ let done=paper.filter(x=>['STOP','HEDEF','SÜRE DOLDU'].includes(x.status)),net=done.reduce((a,x)=>a+(x.net||0),0);
+ $('paperStats').innerHTML=`<div class="stat"><small>Takipte / giriş bekleyen</small><b>${paper.filter(x=>['TAKİPTE','GİRİŞ BEKLİYOR'].includes(x.status)).length}</b></div><div class="stat"><small>Tamamlanan</small><b>${done.length}/10</b></div><div class="stat"><small>Net R</small><b class="${net>=0?'good':'bad'}">${fmt(net)}</b></div><div class="stat"><small>Sonuç</small><b>${done.length>=10?'10 sonuç tamam':'Bekleniyor'}</b></div>`;
+ $('paperRows').innerHTML=paper.map(x=>`<tr><td>${x.sym}</td><td>${x.model}</td><td class="${x.side.toLowerCase()}">${x.side}</td><td>${fmt(x.signalPrice)}</td><td>${x.entry===null?'—':fmt(x.entry)}</td><td>${fmt(x.stop)}</td><td>${fmt(x.target)}</td><td>${x.status}</td><td class="${(x.net||0)>=0?'good':'bad'}">${x.net===null?'—':fmt(x.net)}</td><td>${['TAKİPTE','GİRİŞ BEKLİYOR'].includes(x.status)?elapsedLabel(x.expiresAt-Date.now()):'Bitti'}</td></tr>`).join('')||'<tr><td colspan="10">Henüz takip edilen sinyal yok.</td></tr>';
+}
+function fmt(x){return Number(x).toLocaleString('en-US',{maximumFractionDigits:8})}
+function addSignals(sym,b,closed){for(const model of ['A','B']){let s=evaluate(b,model,closed,sym);if(!s)continue;let base=`${sym}|${model}|${s.side}|${s.time}`;if(closed)signals.delete(base+'|E');let key=base+'|'+(closed?'C':'E');signals.set(key,{sym,model,...s,seen:Date.now()});if(closed)addPaperSignal(sym,model,s);}for(const [k,v] of signals){if(Date.now()-v.seen>30*60*1000)signals.delete(k)}renderPaper(); }
+
+async function fetchHistory(symbol,interval,days){
+ const now=Date.now(),from=now-days*86400000;
+ let end=now,all=[],loops=0;
+ while(end>from&&loops<8){
+  const url=`/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&end=${end}&limit=1000`;
+  const r=await api(url),rows=r.list||[];
+  if(!rows.length)break;
+  all.push(...rows);
+  const oldest=Math.min(...rows.map(x=>+x[0]));
+  if(oldest<=from||oldest>=end)break;
+  end=oldest-1;loops++;
+  await sleep(80);
+ }
+ const ms=interval==='15'?900000:3600000;
+ const unique=new Map();
+ for(const x of all){let t=+x[0];if(t>=from&&t+ms<=now)unique.set(t,{t,o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5]})}
+ return [...unique.values()].sort((a,b)=>a.t-b.t);
+}
+
+function historicalSignal(b,i,model,btc,settings){
+ const a=b.slice(0,i+1),f=a.at(-1),c=a.map(x=>x.c);
+ if(a.length<220)return null;
+ const e20=ema(c,20),e50=ema(c,50),e50old=ema(c.slice(0,-5),50),ax=adx(a),rv=rsi(c),av=atr(a);
+ if(!av||ax<settings.adx)return null;
+ const avg=a.slice(-21,-1).reduce((z,x)=>z+x.v,0)/20,vr=avg?f.v/avg:0;
+ let side=null;
+ if(model==='A'){
+  if(e20>e50&&e50>e50old&&f.c>f.o&&f.c>e20&&rv>=48&&rv<=62)side='LONG';
+  if(e20<e50&&e50<e50old&&f.c<f.o&&f.c<e20&&rv>=38&&rv<=52)side='SHORT';
+ }else{
+  const prev=a.slice(-21,-1),hi=Math.max(...prev.map(x=>x.h)),lo=Math.min(...prev.map(x=>x.l));
+  if(f.c>hi&&f.c>f.o&&rv>=55&&rv<=72)side='LONG';
+  if(f.c<lo&&f.c<f.o&&rv>=28&&rv<=45)side='SHORT';
+ }
+ if(!side||vr<(model==='A'?1.1:1.25))return null;
+ let bt=null;
+ // Use only the latest fully closed 1h BTC candle available at the 15m signal close.
+ let lo=0,hi=btc.length-1,chosen=-1,cut=f.t+900000;
+ while(lo<=hi){const mid=(lo+hi)>>1;if(btc[mid].t+3600000<=cut){chosen=mid;lo=mid+1}else hi=mid-1}
+ if(chosen>=204){
+  const cc=btc.slice(0,chosen+1).map(x=>x.c),last=cc.at(-1),a50=ema(cc,50),a200=ema(cc,200);
+  bt=last>a50&&a50>a200?'LONG':last<a50&&a50<a200?'SHORT':null;
+ }
+ if(settings.btc&&bt&&bt!==side)return null;
+ const dir=side==='LONG'?1:-1,raw=dir===1?Math.min(...a.slice(-10).map(x=>x.l))-av*.5:Math.max(...a.slice(-10).map(x=>x.h))+av*.5;
+ const dist=Math.max(dir===1?f.c-raw:raw-f.c,av*1.5),stop=f.c-dir*dist,target=f.c+dir*dist*settings.rr,stopPct=dist/f.c*100;
+ const estimatedCostR=((settings.fee+settings.slip)/100)*(f.c+(f.c+dir*dist*settings.rr))/dist;
+ if(stopPct>2.5||estimatedCostR>.35)return null;
+ return {model,side,signalTime:f.t,signalPrice:f.c,stop,target,risk:dist};
+}
+function simulateHistoricalTrade(t,b,entryIndex,settings){
+ const dir=t.side==='LONG'?1:-1,entryBar=b[entryIndex];
+ if(!entryBar)return null;
+ const entry=entryBar.o;
+ // Keep the original signal-gap guard, but measure realized R from the actual fill to the stop.
+ if(Math.abs(entry-t.signalPrice)>t.risk*.25)return null;
+ const actualRisk=Math.abs(entry-t.stop);
+ if(!Number.isFinite(actualRisk)||actualRisk<=0)return null;
+ // Reject fills that have already crossed the stop/target geometry.
+ if((dir===1&&(entry<=t.stop||entry>=t.target))||(dir===-1&&(entry>=t.stop||entry<=t.target)))return null;
+ let exit=null,exitType='SÜRE DOLDU',exitTime=null,exitIndex=-1;
+ const maxIndex=Math.min(b.length-1,entryIndex+31); // entry bar + 31 further 15m bars = max 8h
+ for(let j=entryIndex;j<=maxIndex;j++){
+  const x=b[j],sl=dir===1?x.l<=t.stop:x.h>=t.stop,tp=dir===1?x.h>=t.target:x.l<=t.target;
+  if(sl){exit=dir===1&&x.o<t.stop?x.o:dir===-1&&x.o>t.stop?x.o:t.stop;exitType='STOP';exitTime=x.t+900000;exitIndex=j;break}
+  if(tp){exit=t.target;exitType='HEDEF';exitTime=x.t+900000;exitIndex=j;break}
+  if(j===maxIndex){exit=x.c;exitTime=x.t+900000;exitIndex=j}
+ }
+ if(exit===null)return null;
+ const gross=dir*(exit-entry)/actualRisk;
+ // Fees and slippage on entry and exit notional; percentage inputs are one-way.
+ const costR=((settings.fee+settings.slip)/100)*(entry+exit)/actualRisk;
+ return {...t,entry,exit,exitType,exitTime,exitIndex,gross,costR,net:gross-costR};
+}
+function metricRow(label,arr){
+ const wins=arr.filter(x=>x.net>0).length,net=arr.reduce((a,x)=>a+x.net,0);
+ const gp=arr.filter(x=>x.net>0).reduce((a,x)=>a+x.net,0),gl=Math.abs(arr.filter(x=>x.net<0).reduce((a,x)=>a+x.net,0));
+ const pf=gl?gp/gl:gp?Infinity:0;
+ return `<tr><td>${label}</td><td>${arr.length}</td><td>${arr.length?(wins/arr.length*100).toFixed(1)+'%':'—'}</td><td class="${net>=0?'good':'bad'}">${net.toFixed(2)}</td><td>${Number.isFinite(pf)?pf.toFixed(2):'∞'}</td></tr>`;
+}
+async function runBacktest(){
+ const btn=$('btStart');btn.disabled=true;
+ try{
+  const days=+$('btDays').value,limit=$('btCount').value==='all'?Infinity:+$('btCount').value,universe=+$('btUniverse').value;
+  const settings={adx:+$('adx').value,rr:+$('rr').value,fee:+$('fee').value,slip:+$('slip').value,btc:$('btc').checked};
+  $('btStatus').textContent='Bybit piyasa listesi alınıyor…';
+  const [ins,ticks]=await Promise.all([api('/v5/market/instruments-info?category=linear&limit=1000'),api('/v5/market/tickers?category=linear')]);
+  const allowed=new Set(ins.list.filter(x=>x.status==='Trading'&&x.contractType==='LinearPerpetual'&&x.quoteCoin==='USDT').map(x=>x.symbol));
+  const syms=ticks.list.filter(x=>allowed.has(x.symbol)&&+x.turnover24h>=+$('minTurn').value*1e6).sort((a,b)=>+b.turnover24h-+a.turnover24h).slice(0,universe).map(x=>x.symbol);
+  $('btStatus').textContent=`${syms.length} coin için ${days} günlük geçmiş veri alınıyor…`;
+  const [btc] = await Promise.all([fetchHistory('BTCUSDT','60',days+10)]);
+  const data=new Map();let finished=0,failed=[];
+  await mapLimit(syms,6,async sym=>{try{const b=await fetchHistory(sym,'15',days+3);if(b.length>=220)data.set(sym,b);else failed.push(sym)}catch(e){failed.push(sym);console.warn(sym,e.message)}finished++;$('btStatus').textContent=`Geçmiş veriler: ${finished}/${syms.length} coin (${data.size} hazır)`;});
+  const cutoff=Date.now()-days*86400000,candidates=[];
+  for(const [sym,b] of data){
+   for(let i=219;i<b.length-1;i++){
+    if(b[i].t<cutoff-900000)continue;
+    for(const model of ['A','B']){
+     const t=historicalSignal(b,i,model,btc,settings);
+     if(t&&t.signalTime>=cutoff){t.sym=sym;t.entryIndex=i+1;t.bars=b;candidates.push(t)}
+    }
+   }
+  }
+  candidates.sort((a,b)=>a.signalTime-b.signalTime||a.sym.localeCompare(b.sym)||a.model.localeCompare(b.model));
+  // Chronological portfolio simulation: one open position per coin, max 10 concurrent positions.
+  const results=[],busyUntil=new Map(),active=[];
+  let rejectedBusy=0,rejectedCapacity=0,rejectedGap=0;
+  for(const t of candidates){
+   if(results.length>=limit)break;
+   // Sort before removing expired trades; index 0 must be the earliest exit.
+   active.sort((a,b)=>a.exitTime-b.exitTime);
+   while(active.length&&active[0].exitTime<=t.signalTime)active.shift();
+   if((busyUntil.get(t.sym)||0)>t.signalTime){rejectedBusy++;continue}
+   if(active.length>=10){rejectedCapacity++;continue}
+   const res=simulateHistoricalTrade(t,t.bars,t.entryIndex,settings);
+   if(!res){rejectedGap++;continue}
+   results.push(res);busyUntil.set(t.sym,res.exitTime);active.push(res);
+  }
+  results.sort((a,b)=>a.signalTime-b.signalTime);
+  const wins=results.filter(x=>x.net>0).length,net=results.reduce((a,x)=>a+x.net,0);
+  const gp=results.filter(x=>x.net>0).reduce((a,x)=>a+x.net,0),gl=Math.abs(results.filter(x=>x.net<0).reduce((a,x)=>a+x.net,0));
+  const pf=gl?gp/gl:gp?Infinity:0;
+  const avg=results.length?net/results.length:0;
+  // Drawdown follows realized exit chronology, not signal chronology.
+  let equity=0,peak=0,maxDD=0;
+  const realizedChronology=[...results].sort((a,b)=>a.exitTime-b.exitTime||a.signalTime-b.signalTime);
+  for(const x of realizedChronology){equity+=x.net;peak=Math.max(peak,equity);maxDD=Math.max(maxDD,peak-equity)}
+  $('btStats').innerHTML=`<div class="stat"><small>İşlem</small><b>${results.length}</b></div><div class="stat"><small>Kazanma</small><b>${results.length?(wins/results.length*100).toFixed(1)+'%':'—'}</b></div><div class="stat"><small>Net R</small><b class="${net>=0?'good':'bad'}">${net.toFixed(2)}</b></div><div class="stat"><small>Profit factor</small><b>${Number.isFinite(pf)?pf.toFixed(2):'∞'}</b></div>`;
+  $('btExtraStats').innerHTML=`<div class="stat"><small>Ortalama R / işlem</small><b>${avg.toFixed(3)}</b></div><div class="stat"><small>Maks. düşüş (R)</small><b>${maxDD.toFixed(2)}</b></div><div class="stat"><small>Aday</small><b>${candidates.length}</b></div><div class="stat"><small>Girişe ulaşmayan / çakışan</small><b>${rejectedGap} / ${rejectedBusy+rejectedCapacity}</b></div>`;
+  const groups=[];
+  for(const m of ['A','B'])groups.push([`Model ${m}`,results.filter(x=>x.model===m)]);
+  for(const d of ['LONG','SHORT'])groups.push([d,results.filter(x=>x.side===d)]);
+  for(const e of ['STOP','HEDEF','SÜRE DOLDU'])groups.push([e,results.filter(x=>x.exitType===e)]);
+  for(let w=0;w<5;w++){const lo=cutoff+w*7*86400000,hi=lo+7*86400000;groups.push([`Dönem ${w+1}`,results.filter(x=>x.signalTime>=lo&&x.signalTime<hi)])}
+  $('btBreakdown').innerHTML=groups.map(([label,arr])=>metricRow(label,arr)).join('');
+  $('btRows').innerHTML=results.map((x,i)=>`<tr><td>${i+1}</td><td>${x.sym}</td><td>${x.model}</td><td class="${x.side.toLowerCase()}">${x.side}</td><td>${new Date(x.signalTime).toISOString().slice(0,16).replace('T',' ')}</td><td>${fmt(x.entry)}</td><td>${fmt(x.stop)}</td><td>${fmt(x.target)}</td><td>${fmt(x.exit)}</td><td>${x.exitType}</td><td class="${x.net>=0?'good':'bad'}">${x.net.toFixed(3)}</td></tr>`).join('')||'<tr><td colspan="11">Seçilen dönemde koşulları sağlayan ve girişe ulaşan işlem bulunamadı.</td></tr>';
+  $('btStatus').textContent=`Tamamlandı: ${data.size}/${syms.length} coin verisi işlendi; ${failed.length} coin verisi alınamadı/yetersiz. ${candidates.length} aday bulundu, ${results.length} işlem simüle edildi. Çakışma nedeniyle atlanan: ${rejectedBusy+rejectedCapacity}; giriş sapması nedeniyle atlanan: ${rejectedGap}.`;
+ }catch(e){$('btStatus').textContent='Simülasyon hatası: '+e.message}
+ finally{btn.disabled=false}
+}
+$('btStart').addEventListener('click',runBacktest);
+
+function render(){let rows=[...signals.values()].sort((a,b)=>b.seen-a.seen).slice(0,150);$('signals').innerHTML=rows.map(x=>`<tr><td>${x.sym}</td><td>${x.model}</td><td class="${x.side.toLowerCase()}">${x.side}</td><td><span class="pill ${x.closed?'confirm':'early'}">${x.closed?'ONAYLI':'ERKEN UYARI'}</span></td><td>${fmt(x.entry)}</td><td>${fmt(x.stop)}</td><td>${fmt(x.target)}</td><td>${fmt(x.stopPct)}%</td><td>${fmt(x.costR)}R</td><td>${new Date(x.time+900000).toISOString().slice(11,19)}</td></tr>`).join('')||'<tr><td colspan="10">Şu anda kurallara uyan sinyal yok.</td></tr>';$('stats').innerHTML=`<div class="stat"><small>Takip edilen</small><b>${symbols.length}</b></div><div class="stat"><small>WebSocket</small><b class="${ws&&ws.readyState===1?'good':'bad'}">${ws&&ws.readyState===1?'Bağlı':'Kapalı'}</b></div><div class="stat"><small>Sinyal</small><b>${rows.length}</b></div><div class="stat"><small>Son güncelleme</small><b>${lastUpdate?new Date(lastUpdate).toLocaleTimeString('tr-TR'):'—'}</b></div>`}
+function handleKline(msg){
+ if(!msg.topic||!msg.data)return;
+ let parts=msg.topic.split('.'),iv=parts[1],sym=parts[2];
+ if(iv==='60'&&sym==='BTCUSDT'){
+  for(const z of msg.data){if(!z.confirm)continue;let c={t:+z.start,o:+z.open,h:+z.high,l:+z.low,c:+z.close,v:+z.volume},idx=btcBars.findIndex(x=>x.t===c.t);if(idx>=0)btcBars[idx]=c;else btcBars.push(c);btcBars.sort((a,b)=>a.t-b.t);if(btcBars.length>260)btcBars.splice(0,btcBars.length-260)}
+ }else if(iv==='15'){
+  let list=bars.get(sym);if(!list)return;
+  for(const z of msg.data){let c={t:+z.start,o:+z.open,h:+z.high,l:+z.low,c:+z.close,v:+z.volume},idx=list.findIndex(x=>x.t===c.t);if(idx>=0)list[idx]=c;else{list.push(c);list.sort((a,b)=>a.t-b.t);if(list.length>260)list.splice(0,list.length-260)}
+   if(z.confirm)addSignals(sym,list,true);else if($('early').checked)addSignals(sym,list,false)
+  }
+  for(const z of msg.data){if(z.confirm){let c={t:+z.start,o:+z.open,h:+z.high,l:+z.low,c:+z.close,v:+z.volume};updatePaper(sym,c)}}
+  diag.klines++;
+ }
+ lastUpdate=Date.now();render();renderDiagnostics();
+}
+function renderNear(){
+ let arr=[...nearMiss.values()].sort((a,b)=>b.score-a.score||b.time-a.time);
+ let near=arr.filter(x=>x.score>=2&&x.reason!=='ONAYLI').length,ok=arr.filter(x=>x.reason==='ONAYLI').length;
+ $('nearStats').innerHTML=`<div class="stat"><small>Son değerlendirme</small><b>${evalCount}</b></div><div class="stat"><small>Coin/model son durumu</small><b>${arr.length}</b></div><div class="stat"><small>Yakın aday</small><b>${near}</b></div><div class="stat"><small>Onaylı son durum</small><b>${ok}</b></div>`;
+ $('nearRows').innerHTML=arr.slice(0,40).map(x=>`<tr><td>${x.sym}</td><td>${x.model}</td><td class="${x.side.toLowerCase()}">${x.side}</td><td>${x.reason}</td><td>${x.adx.toFixed(1)}</td><td>${x.vol.toFixed(2)}x</td><td>${x.rsi.toFixed(1)}</td><td>${x.missing}</td><td>${new Date(x.time+900000).toISOString().slice(11,19)}</td></tr>`).join('')||'<tr><td colspan="9">Henüz değerlendirme yok.</td></tr>';
+}
+function renderDiagnostics(){
+ $('diagStats').innerHTML=`<div class="stat"><small>WebSocket mesajı</small><b>${diag.messages}</b></div><div class="stat"><small>15m mum güncellemesi</small><b>${diag.klines}</b></div><div class="stat"><small>Abonelik onayı</small><b>${diag.acks}</b></div><div class="stat"><small>Son mesaj</small><b>${diag.lastMsg?Math.round((Date.now()-diag.lastMsg)/1000)+' sn':'—'}</b></div>`;
+ $('gates').innerHTML=Object.entries({'Yetersiz geçmiş mum':diag.gates.bars,'ADX filtresi':diag.gates.adx,'Hacim filtresi':diag.gates.volume,'Sinyal deseni':diag.gates.pattern,'BTC ters trend filtresi':diag.gates.btc,'Stop / maliyet filtresi':diag.gates.cost,'Üretilen sinyal':diag.gates.signals}).map(([k,v])=>`<div class="metric"><small>${k}</small><b>${v}</b></div>`).join('');
+}
+function connect(){if(!running)return;try{ws=new WebSocket(WS)}catch(e){scheduleReconnect();return}ws.onopen=()=>{let topics=['kline.60.BTCUSDT',...symbols.map(s=>'kline.15.'+s)];for(let i=0;i<topics.length;i+=10)ws.send(JSON.stringify({op:'subscribe',args:topics.slice(i,i+10)}));$('status').textContent=`WebSocket açıldı; ${topics.length} kanal için abonelik yanıtı bekleniyor…`;render();};ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}diag.messages++;diag.lastMsg=Date.now();if(m.op==='subscribe'||m.success!==undefined){if(m.success)diag.acks++;else if(m.success===false)$('status').textContent='Abonelik hatası: '+(m.ret_msg||'bilinmeyen hata');renderDiagnostics()}if(m.topic)handleKline(m);};ws.onerror=()=>{$('status').textContent='WebSocket bağlantı hatası; yeniden bağlanılacak.'};ws.onclose=()=>{render();if(running)scheduleReconnect()};clearInterval(watchdog);watchdog=setInterval(()=>{if(ws&&ws.readyState===1){ws.send(JSON.stringify({op:'ping'}));if(diag.lastMsg&&Date.now()-diag.lastMsg>45000)$('status').textContent='Uyarı: 45 saniyedir veri mesajı gelmedi; bağlantı kontrol ediliyor.'}},20000)}
+function scheduleReconnect(){if(!running)return;clearTimeout(reconnectTimer);reconnectTimer=setTimeout(()=>{if(running){$('status').textContent='Bağlantı yenileniyor…';connect()}},2500)}
+async function start(){if(running)return;running=true;$('start').disabled=true;$('status').textContent='Bybit piyasa listesi alınıyor…';$('progress').style.width='0%';signals.clear();bars.clear();paper=loadPaper();nearMiss.clear();evalCount=0;nearCount=0;renderPaper();renderNear();diag.messages=0;diag.klines=0;diag.acks=0;diag.lastMsg=0;diag.gateSeen.clear();diag.gates={bars:0,adx:0,btc:0,volume:0,pattern:0,cost:0,signals:0};try{let [ins,ticks]=await Promise.all([api('/v5/market/instruments-info?category=linear&limit=1000'),api('/v5/market/tickers?category=linear')]);let allowed=new Set(ins.list.filter(x=>x.status==='Trading'&&x.contractType==='LinearPerpetual'&&x.quoteCoin==='USDT').map(x=>x.symbol)),floor=+$('minTurn').value*1e6;symbols=ticks.list.filter(x=>allowed.has(x.symbol)&&+x.turnover24h>=floor).sort((a,b)=>+b.turnover24h-+a.turnover24h).slice(0,+$('universe').value).map(x=>x.symbol);if(!symbols.length)throw Error('Filtrelere uyan parite bulunamadı.');let bres=await api('/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=220');btcBars=(bres.list||[]).map(x=>({t:+x[0],o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5]})).filter(x=>x.t+3600000<=Date.now()).sort((a,b)=>a.t-b.t);await mapLimit(symbols,8,async sym=>{try{let r=await api(`/v5/market/kline?category=linear&symbol=${sym}&interval=15&limit=240`);let a=(r.list||[]).map(x=>({t:+x[0],o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5]})).filter(x=>x.t+900000<=Date.now()).sort((a,b)=>a.t-b.t);if(a.length>=220)bars.set(sym,a)}catch(e){console.warn('Kline',sym,e.message)}});symbols=symbols.filter(s=>bars.has(s));if(!symbols.length)throw Error('Yeterli geçmiş mum alınamadı.');for(const sym of symbols){const a=bars.get(sym);addSignals(sym,a,true)}$('progress').style.width='100%';$('notes').textContent=`İlk yüklemede ${symbols.length} coin için geçmiş mum alındı. BTC trendi nötrse sinyal otomatik engellenmez; yalnızca açıkça ters yöndeyse filtre uygulanır. Filtre sayaçları artık coin/model/mum başına bir kez sayılır.`;connect();render();renderDiagnostics();renderPaper();renderNear()}catch(e){$('status').textContent='Hata: '+e.message;running=false;$('start').disabled=false}}
+function stop(){running=false;clearTimeout(reconnectTimer);clearInterval(watchdog);if(ws){ws.onclose=null;ws.close();ws=null}$('start').disabled=false;$('status').textContent='Tarama durduruldu.';render();renderDiagnostics()}
+$('start').addEventListener('click',start);$('stop').addEventListener('click',stop);document.addEventListener('visibilitychange',()=>{if(!document.hidden){renderPaper();if(running&&(!ws||ws.readyState===3))connect()}});window.addEventListener('beforeunload',stop);
+renderPaper();
+// Deterministic local sanity checks: indicator bounds and signal geometry.
+(function selfTest(){let b=[];for(let i=0;i<260;i++){let c=100+i*.08+Math.sin(i/4);b.push({t:i*900000,o:c-.1,h:c+.5,l:c-.5,c,v:1000+(i%7)*30})}let e=ema(b.map(x=>x.c),20),a=atr(b),d=adx(b);let ok=Number.isFinite(e)&&e>0&&a>0&&d>=0&&d<=100;$('notes').textContent='Yerel kontrol: EMA / ATR / ADX sayısal sınır testleri '+(ok?'BAŞARILI':'BAŞARISIZ')+'. Canlı API ve WebSocket testi tarayıcıda bağlantı kurulduğunda yapılır.';if(!ok){$('notes').textContent='Yerel kontrol BAŞARISIZ; tarama durdurulmalı.';console.error('Self-test failed')}})();
+</script></main></body></html>
